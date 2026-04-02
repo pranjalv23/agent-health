@@ -1,0 +1,39 @@
+[project]
+name = "agent-health"
+version = "0.1.0"
+description = "AI-powered everyday health and fitness companion agent"
+authors = [
+    {name = "None"}
+]
+readme = "README.md"
+requires-python = ">=3.13,<4.0"
+dependencies = [
+    "langchain (>=1.2.12,<2.0.0)",
+    "langgraph (>=1.0.10,<2.0.0)",
+    "motor (>=3.7.0,<4.0.0)",
+    "fastapi (>=0.115.0,<1.0.0)",
+    "uvicorn[standard] (>=0.42.0,<0.43.0)",
+    "a2a-sdk (>=0.2.0)",
+    "langchain-mcp-adapters (>=0.1.0)",
+    "mem0ai (>=1.0.5,<2.0.0)",
+    "langgraph-checkpoint-mongodb (>=0.3.1)",
+    "agent-sdk (>=0.1.0)",
+    "httpx (>=0.27.0)",
+    "fpdf2 (>=2.7.0)",
+    "slowapi>=0.1.9",
+]
+
+[tool.poetry]
+package-mode = false
+
+[tool.poetry.dependencies]
+agent-sdk = { git = "https://github.com/pranjalv23/agent-sdk.git", tag = "v0.1.41" }
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "ipykernel (>=7.2.0,<8.0.0)"
+]

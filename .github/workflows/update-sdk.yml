@@ -1,0 +1,48 @@
+name: Update SDK Automatically
+
+on:
+  repository_dispatch:
+    types: [sdk-update]
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Update submodule to new tag
+        run: |
+          cd agent-sdk
+          git fetch --tags
+          git checkout ${{ github.event.client_payload.tag }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Update SDK dependency tag
+        run: |
+          sed -i 's/tag = "v[^"]*"/tag = "${{ github.event.client_payload.tag }}"/' pyproject.toml
+
+      - name: Update lock file
+        run: poetry lock -vvv
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add agent-sdk pyproject.toml poetry.lock
+          git commit -m "update sdk to ${{ github.event.client_payload.tag }}" || echo "No changes"
+          git push
+
+      - name: Tag repo
+        run: |
+          git tag ${{ github.event.client_payload.tag }} || echo "Tag exists"
+          git push origin ${{ github.event.client_payload.tag }} || echo "Already pushed"

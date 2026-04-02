@@ -1,0 +1,39 @@
+name: Deploy agent-health
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Deploy to OCI VM
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ubuntu
+          key: ${{ secrets.OCI_SSH_KEY }}
+          script: |
+            set -e
+            cd ~/repos/agent-health
+            PREV_TAG=$(git describe --tags --exact-match HEAD 2>/dev/null || git rev-parse --short HEAD)
+            git fetch --tags
+            git checkout ${{ github.ref_name }}
+            git submodule update --init --recursive
+            cd ~/deploy
+            docker compose build --no-cache agent-health
+            docker compose up -d --no-deps agent-health || {
+              echo "ERROR: docker compose up failed. Rolling back to ${PREV_TAG}..."
+              cd ~/repos/agent-health
+              git checkout "${PREV_TAG}"
+              git submodule update --init --recursive
+              cd ~/deploy
+              docker compose build --no-cache agent-health
+              docker compose up -d --no-deps agent-health
+              echo "Rollback to ${PREV_TAG} complete."
+              exit 1
+            }
+            docker image prune -f || true
