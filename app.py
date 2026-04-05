@@ -15,7 +15,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from agents.agent import create_agent, run_query, _build_dynamic_context, SYSTEM_PROMPT, save_memory
+from agents.agent import create_agent, run_query, _build_dynamic_context, SYSTEM_PROMPT, save_memory, _fix_flash_card_format
 from database.mongo import MongoDB
 from a2a_service.server import create_a2a_app
 
@@ -258,6 +258,9 @@ async def ask_stream(body: AskRequest, request: Request):
                 fallback = "Sorry, the model returned an empty response. Please try again or switch to a different model."
                 yield f"data: {json.dumps({'text': fallback})}\n\n"
                 response_text = fallback
+
+            if body.response_format == "flash_cards":
+                response_text = _fix_flash_card_format(response_text)
 
             try:
                 save_memory(user_id=user_id or session_id, query=body.query, response=response_text)

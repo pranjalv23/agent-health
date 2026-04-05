@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from datetime import datetime, timezone
 
 from agent_sdk.agents import BaseAgent
@@ -147,8 +148,40 @@ RESPONSE_FORMAT_INSTRUCTIONS = {
         "Keep your response concise — 5-7 bullet points maximum. "
         "Focus on the key takeaways and actionable steps. Skip lengthy explanations."
     ),
+    "flash_cards": (
+        "\n\nRESPONSE FORMAT OVERRIDE: The user wants INSIGHT CARDS. "
+        "Format your response as a series of insight cards using this EXACT format for each card:\n\n"
+        "### [Topic Label]\n"
+        "**Key Insight:** [The main finding or takeaway — keep it short and prominent]\n"
+        "[1-2 sentence explanation with context]\n\n"
+        "STRICT FORMATTING RULES:\n"
+        "- Use exactly ### (three hashes) for each card topic — NOT ## or ####\n"
+        "- Do NOT wrap topic names in **bold** — just plain text after ###\n"
+        "- Do NOT use bullet points (- or *) for the Key Insight line — start it directly with **Key Insight:**\n"
+        "- Every card MUST have a **Key Insight:** line\n"
+        "- Start directly with the first ### card — no title header, preamble, or introductory text before the cards\n\n"
+        "Generate 6-10 cards covering the most important health and fitness insights."
+    ),
     "detailed": "",
 }
+
+def _fix_flash_card_format(text: str) -> str:
+    """Post-process flash card responses to enforce consistent ### heading format."""
+    text = re.sub(r'^## (?!#)', '### ', text, flags=re.MULTILINE)
+    text = re.sub(r'^#### ', '### ', text, flags=re.MULTILINE)
+    first_card = re.search(r'^### ', text, re.MULTILINE)
+    if first_card:
+        text = text[first_card.start():]
+    card_count = len(re.findall(r'^### ', text, re.MULTILINE))
+    if card_count < 3:
+        logger.warning("Flash card response has only %d cards", card_count)
+    return text
+
+def _build_system_prompt(response_format: str | None = None) -> str:
+    fmt = RESPONSE_FORMAT_INSTRUCTIONS.get(response_format or "detailed", "")
+    if fmt:
+        return SYSTEM_PROMPT + "\n" + fmt
+    return SYSTEM_PROMPT
 
 
 def _get_checkpointer() -> AsyncMongoDBSaver:
@@ -246,10 +279,6 @@ async def _build_dynamic_context(
                 )
                 logger.info("Injected health profile into context for user='%s'", user_id)
 
-    format_instruction = RESPONSE_FORMAT_INSTRUCTIONS.get(response_format or "detailed", "")
-    if format_instruction:
-        parts.append(format_instruction.strip())
-
     context_block = "\n\n".join(parts)
     return f"[CONTEXT]\n{context_block}\n[/CONTEXT]\n\n"
 
@@ -271,13 +300,18 @@ async def run_query(
     )
     enriched_query = dynamic_context + query
 
+    system_prompt = _build_system_prompt(response_format)
+    
     agent = create_agent()
     result = await agent.arun(
         enriched_query,
         session_id=session_id,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt,
         model_id=model_id,
     )
+
+    if response_format == "flash_cards":
+        result["response"] = _fix_flash_card_format(result["response"])
 
     logger.info("run_query finished — session='%s', steps: %d", session_id, len(result["steps"]))
     save_memory(user_id=user_id or session_id, query=query, response=result["response"])
