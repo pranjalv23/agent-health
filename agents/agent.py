@@ -3,9 +3,10 @@ import os
 import re
 from datetime import datetime, timezone
 
+import asyncio
 from agent_sdk.agents import BaseAgent
 from agent_sdk.checkpoint import AsyncMongoDBSaver
-from database.memory import get_memories, save_memory
+from agent_sdk.database.memory import get_memories, save_memory
 from database.mongo import MongoDB
 from tools.fitness_plan import generate_fitness_plan
 
@@ -225,8 +226,9 @@ async def _build_dynamic_context(
     Injects: today's date, long-term memories, health profile, and format hints.
     """
     mem_key = user_id or session_id
+    mem_err: str | None = None
     if query.strip().lower() not in _TRIVIAL_FOLLOWUPS and len(query.strip()) > 10:
-        memories = get_memories(user_id=mem_key, query=query)
+        memories, mem_err = await asyncio.to_thread(get_memories, user_id=mem_key, query=query)
     else:
         memories = []
 
@@ -240,6 +242,10 @@ async def _build_dynamic_context(
         memory_lines = "\n".join(f"- {m}" for m in memories)
         parts.append(f"User context (long-term memory):\n{memory_lines}")
         logger.info("Injected %d memories into context for session='%s'", len(memories), session_id)
+
+    if mem_err:
+        parts.append(f"Note: {mem_err}")
+        logger.warning("Mem0 degradation for session='%s': %s", session_id, mem_err)
 
     # Inject health profile if one exists for this user
     if user_id:
@@ -317,3 +323,26 @@ async def run_query(
     save_memory(user_id=user_id or session_id, query=query, response=result["response"])
 
     return result
+
+
+async def create_stream(
+    query: str,
+    session_id: str = "default",
+    response_format: str | None = None,
+    model_id: str | None = None,
+    user_id: str | None = None,
+):
+    dynamic_context = await _build_dynamic_context(
+        session_id, query, response_format=response_format, user_id=user_id
+    )
+    enriched_query = dynamic_context + query
+    system_prompt = _build_system_prompt(response_format)
+    
+    agent = create_agent()
+    # Return the unconsumed StreamResult for the caller to iterate over
+    return agent.astream(
+        enriched_query,
+        session_id=session_id,
+        system_prompt=system_prompt,
+        model_id=model_id,
+    )
