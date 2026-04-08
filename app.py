@@ -29,6 +29,8 @@ limiter = Limiter(key_func=get_remote_address)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not os.getenv("INTERNAL_API_KEY"):
+        logger.warning("INTERNAL_API_KEY is not set — internal API is unprotected. Set this in production.")
     agent = create_agent()
     await agent._ensure_initialized()
     logger.info("MCP servers connected, health agent ready")
@@ -78,6 +80,15 @@ async def verify_internal_key(request: Request, call_next):
         if expected and request.headers.get("X-Internal-API-Key") != expected:
             return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content={"detail": "Unauthorized internal access"})
     return await call_next(request)
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 a2a_app = create_a2a_app()
 app.mount("/a2a", a2a_app.build())
@@ -289,6 +300,7 @@ async def ask_stream(body: AskRequest, request: Request):
 
 
 @app.get("/history/user/me", response_model=HistoryResponse)
+@limiter.limit("60/minute")
 async def get_history_by_user(http_request: Request):
     user_id = http_request.headers.get("X-User-Id") or None
     if not user_id:
@@ -299,10 +311,23 @@ async def get_history_by_user(http_request: Request):
 
 
 @app.get("/history/{session_id}", response_model=HistoryResponse)
-async def get_history(session_id: str):
+@limiter.limit("60/minute")
+async def get_history(request: Request, session_id: str):
     logger.info("GET /history — session='%s'", session_id)
     history = await MongoDB.get_history(session_id)
     return HistoryResponse(session_id=session_id, history=history)
+
+
+class SessionsHistoryRequest(BaseModel):
+    session_ids: list[str]
+
+@app.post("/history/sessions")
+@limiter.limit("30/minute")
+async def get_history_by_sessions(request: Request, body: SessionsHistoryRequest):
+    safe_ids = [s for s in body.session_ids[:20] if isinstance(s, str) and s.isalnum() and len(s) <= 64]
+    logger.info("POST /history/sessions — %d session(s)", len(safe_ids))
+    history = await MongoDB.get_history_by_sessions(safe_ids)
+    return {"history": history}
 
 
 # ── Health profile endpoints ──
