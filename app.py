@@ -301,8 +301,8 @@ async def ask_stream(body: AskRequest, request: Request):
 
 @app.get("/history/user/me", response_model=HistoryResponse)
 @limiter.limit("60/minute")
-async def get_history_by_user(http_request: Request):
-    user_id = http_request.headers.get("X-User-Id") or None
+async def get_history_by_user(request: Request):
+    user_id = request.headers.get("X-User-Id") or None
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     logger.info("GET /history/user/me — user='%s'", user_id)
