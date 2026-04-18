@@ -7,6 +7,7 @@ import asyncio
 from agent_sdk.agents import BaseAgent
 from agent_sdk.checkpoint import AsyncMongoDBSaver
 from agent_sdk.database.memory import get_memories, save_memory
+from agent_sdk.memory import SemanticMemoryManager
 from database.mongo import MongoDB
 from tools.fitness_plan import generate_fitness_plan
 
@@ -149,6 +150,14 @@ MCP_SERVERS = {
 
 _agent_instance: BaseAgent | None = None
 _checkpointer: AsyncMongoDBSaver | None = None
+_semantic_memory: SemanticMemoryManager | None = None
+
+
+def _get_semantic_memory() -> SemanticMemoryManager:
+    global _semantic_memory
+    if _semantic_memory is None:
+        _semantic_memory = SemanticMemoryManager()
+    return _semantic_memory
 
 RESPONSE_FORMAT_INSTRUCTIONS = {
     "summary": (
@@ -200,6 +209,7 @@ def create_agent() -> BaseAgent:
             mcp_servers=MCP_SERVERS,
             system_prompt=SYSTEM_PROMPT,
             checkpointer=_get_checkpointer(),
+            semantic_memory=_get_semantic_memory(),
         )
     return _agent_instance
 
@@ -316,6 +326,7 @@ async def run_query(
         session_id=session_id,
         system_prompt=system_prompt,
         model_id=model_id,
+        user_id=user_id,
     )
 
     logger.info("run_query finished — session='%s', steps: %d", session_id, len(result["steps"]))
@@ -344,6 +355,7 @@ async def create_stream(
         session_id=session_id,
         system_prompt=system_prompt,
         model_id=model_id,
+        user_id=user_id,
     )
 
 
@@ -358,7 +370,7 @@ async def stream_for_a2a(query: str, *, session_id: str = "default",
     enriched_query = dynamic_context + query
     system_prompt = _build_system_prompt(response_format)
     agent = create_agent()
-    stream = agent.astream(enriched_query, session_id=session_id, system_prompt=system_prompt, model_id=model_id)
+    stream = agent.astream(enriched_query, session_id=session_id, system_prompt=system_prompt, model_id=model_id, user_id=user_id)
 
     response_parts: list[str] = []
     async for chunk in stream:
