@@ -29,7 +29,7 @@ dependencies = [
 package-mode = false
 
 [tool.poetry.dependencies]
-agent-sdk = { path = "./agent-sdk", develop = true }
+agent-sdk = { path = "./agent-sdk", develop = true, extras = ["akv"] }
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
