@@ -1,6 +1,6 @@
 import os
 
-from a2a.types import AgentCard, AgentSkill, AgentCapabilities
+from a2a.types import AgentCard, AgentCapabilities, AgentInterface, AgentSkill
 
 HEALTH_AGENT_CARD = AgentCard(
     name="Health & Fitness Coach",
@@ -10,7 +10,12 @@ HEALTH_AGENT_CARD = AgentCard(
         "long-term memory, answers exercise form questions, and offers general health "
         "information with appropriate safety disclaimers."
     ),
-    url=os.getenv("AGENT_PUBLIC_URL", "http://localhost:9005"),
+    supported_interfaces=[
+        AgentInterface(
+            url=os.getenv("AGENT_PUBLIC_URL", "http://localhost:9005"),
+            protocol_binding="JSONRPC",
+        )
+    ],
     version="1.0.0",
     skills=[
         AgentSkill(
@@ -55,7 +60,7 @@ HEALTH_AGENT_CARD = AgentCard(
             tags=["health", "exercise", "form", "injury", "symptoms", "wellness"],
         ),
     ],
-    defaultInputModes=["text"],
-    defaultOutputModes=["text"],
-    capabilities=AgentCapabilities(streaming=True, pushNotifications=False),
+    default_input_modes=["text"],
+    default_output_modes=["text"],
+    capabilities=AgentCapabilities(streaming=True, push_notifications=False),
 )
