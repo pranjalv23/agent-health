@@ -3,7 +3,7 @@ load_akv_secrets()
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 
 import uvicorn
@@ -333,8 +333,7 @@ async def log_progress(body: ProgressLogRequest, request: Request):
     user_id = request.headers.get("X-User-Id") or None
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
-    from datetime import timezone as _tz
-    date = body.date or datetime.now(_tz.utc).strftime("%Y-%m-%d")
+    date = body.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     await MongoDB.log_progress(
         user_id=user_id,
         metric_type=body.metric_type,
@@ -377,8 +376,7 @@ async def log_nutrition(body: NutritionLogRequest, request: Request):
     user_id = request.headers.get("X-User-Id") or None
     if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
-    from datetime import timezone as _tz
-    date = body.date or datetime.now(_tz.utc).strftime("%Y-%m-%d")
+    date = body.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     await MongoDB.log_nutrition(
         user_id=user_id,
         meal_description=body.meal_description,
